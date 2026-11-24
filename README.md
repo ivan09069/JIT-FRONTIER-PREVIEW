@@ -1,7 +1,7 @@
-﻿# JIT FRONTIER - Public Preview
+# JIT FRONTIER - Public Preview
 Find the gap. Build the proof.
 
-Public evaluation snapshot of the JIT discovery engine, v0.1.2, published by ivan09069. The active research branch and private evidence remain separate.
+Public evaluation snapshot of the JIT discovery engine, v0.1.3, published by ivan09069. The active research branch and private evidence remain separate.
 
 ## Run locally
 Python 3.10+; no third-party dependencies.
@@ -19,3 +19,7 @@ Selected source and offline tests from JIT FRONTIER v0.1.2, snapshot df2ae51563d
 
 ## Rights
 Copyright 2026 ivan09069. Public evaluation preview. No additional open-source license is granted by this publication.
+
+## Security
+
+The original preview was withdrawn. This update refuses existing report files, bounds API responses to 1 MiB, rejects redirects and unapproved API hosts, and omits raw retrieval exception messages. Use fresh output directories. Do not supply secrets for evaluation.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""JIT FRONTIER v0.1.2 -- read-only cross-domain evidence scout.
+"""JIT FRONTIER v0.1.3 -- read-only cross-domain evidence scout.
 
 Uses public APIs (Crossref & GitHub), optional OpenAlex with user key,
 proposes hypotheses (NEVER asserts novelty),
@@ -21,7 +21,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-USER_AGENT = "JITFrontierResearchPrototype/0.1.2 (public metadata only)"
+USER_AGENT = "JITFrontierResearchPrototype/0.1.3 (public metadata only)"
+MAX_RESPONSE = 1024 * 1024
+ALLOWED_HOSTS = {"api.crossref.org", "api.github.com", "api.openalex.org"}
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Redirect refused")
 
 
 @dataclass(frozen=True)
@@ -40,9 +46,15 @@ class Source:
 
 
 def read_json_url(url: str, timeout: float = 15.0) -> dict[str, Any]:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_HOSTS or parsed.username or parsed.password or parsed.port not in (None, 443):
+        raise ValueError("Unapproved network destination")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as result:
-        return json.load(result)
+    with urllib.request.build_opener(NoRedirect()).open(req, timeout=timeout) as result:
+        raw = result.read(MAX_RESPONSE + 1)
+        if len(raw) > MAX_RESPONSE:
+            raise ValueError("Response exceeds limit")
+        return json.loads(raw)
 
 
 def from_crossref(theme: str, limit: int) -> list[Source]:
@@ -194,7 +206,7 @@ def render_html(report: dict[str, Any]) -> str:
         )
     errors = " ".join(report["retrieval_errors"]) if report["retrieval_errors"] else "None"
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#070712"><title>JIT FRONTIER | Discovery Engine</title><style>{STYLES}</style></head>
-<body><main><header><nav><div class="brand-lockup"><div class="jit-signature" aria-label="JIT">JIT</div><div class="brand-stack"><strong>FRONTIER</strong><small>DISCOVERY ENGINE</small></div></div><div class="nav-meta">JIT://DISCOVERY&nbsp; / &nbsp;v0.1.2</div></nav>
+<body><main><header><nav><div class="brand-lockup"><div class="jit-signature" aria-label="JIT">JIT</div><div class="brand-stack"><strong>FRONTIER</strong><small>DISCOVERY ENGINE</small></div></div><div class="nav-meta">JIT://DISCOVERY&nbsp; / &nbsp;v0.1.3</div></nav>
 <div class="hero"><div class="eyebrow">RESEARCH // CONNECT // CHALLENGE // PROVE</div><h1>THE NEXT <span>FRONTIER.</span></h1>
 <p class="mission">FIND THE GAP. BUILD THE PROOF.</p><p class="sub">A cross-domain discovery system that explores underused connections and turns them into testable opportunities. Every idea carries its evidence and its uncertainty.</p></div>
 <span class="pill">DOMAIN A: <strong>{esc(report["theme_a"])}</strong></span><span class="pill">DOMAIN B: <strong>{esc(report["theme_b"])}</strong></span>
@@ -234,8 +246,8 @@ def main(argv: list[str] | None = None) -> int:
                 openalex_key = Path(args.openalex_key_file).read_text(encoding="utf-8").strip()
                 if not openalex_key:
                     raise ValueError("OpenAlex key file was empty")
-            except OSError as exc:
-                print(f"Cannot read OpenAlex key file: {exc}", file=sys.stderr)
+            except (OSError, ValueError) as exc:
+                print("Cannot read OpenAlex key file", file=sys.stderr)
                 return 2
         for theme in (a, b):
             loaders = [(from_crossref, (theme, args.limit)), (from_github, (theme, args.limit))]
@@ -245,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
                 try:
                     sources.extend(loader(*params))
                 except (urllib.error.URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as exc:
-                    errors.append(f"{getattr(loader, '__name__', 'source_api')} [{theme}]: {str(exc)[:180]}")
+                    errors.append(f"{getattr(loader, '__name__', 'source_api')}: retrieval failed ({type(exc).__name__})")
         if not sources:
             print("No live evidence fetched; refusing to manufacture research results.", file=sys.stderr)
             for err in errors:
@@ -254,15 +266,24 @@ def main(argv: list[str] | None = None) -> int:
     sources = normalize_sources(sources)
     candidates = make_candidates(sources, a, b, args.cards)
     report = {
-        "name": "JIT FRONTIER", "version": "0.1.2", "theme_a": a, "theme_b": b,
+        "name": "JIT FRONTIER", "version": "0.1.3", "theme_a": a, "theme_b": b,
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "demo": demo, "retrieval_errors": errors,
         "sources": [asdict(s) for s in sources], "candidates": candidates,
     }
     folder = Path(args.out)
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "opportunities.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    (folder / "index.html").write_text(render_html(report), encoding="utf-8")
+    outputs = {"opportunities.json": json.dumps(report, indent=2, ensure_ascii=False), "index.html": render_html(report)}
+    if any((folder / name).exists() or (folder / name).is_symlink() for name in outputs):
+        print("Output already exists; choose a fresh directory.", file=sys.stderr)
+        return 2
+    try:
+        for name, content in outputs.items():
+            with (folder / name).open("x", encoding="utf-8") as stream:
+                stream.write(content)
+    except OSError:
+        print("Cannot create report safely; choose a fresh directory.", file=sys.stderr)
+        return 2
     print(f"Sources: {len(sources)} | Hypotheses: {len(candidates)} | Demo: {demo}")
     print("JSON:", (folder / "opportunities.json").resolve())
     print("Dashboard:", (folder / "index.html").resolve())
