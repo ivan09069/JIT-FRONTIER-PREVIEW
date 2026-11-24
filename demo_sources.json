@@ -1,0 +1,10 @@
+{
+  "theme_a": "biomimetic materials",
+  "theme_b": "urban heat mitigation",
+  "sources": [
+    {"collection":"Demo","theme":"biomimetic materials","kind":"research","title":"Fictional structured surface study (demo)","url":"https://example.org/demo/surfaces","summary":"Fabricated demonstration record; not a real publication.","year":2025},
+    {"collection":"Demo","theme":"biomimetic materials","kind":"implementation","title":"Fictional surface-design toolkit (demo)","url":"https://example.org/demo/surface-code","summary":"Fabricated demonstration record; not a real repository.","year":null},
+    {"collection":"Demo","theme":"urban heat mitigation","kind":"research","title":"Fictional urban cooling study (demo)","url":"https://example.org/demo/urban-study","summary":"Fabricated demonstration record; not a real publication.","year":2024},
+    {"collection":"Demo","theme":"urban heat mitigation","kind":"implementation","title":"Fictional heat-map tool (demo)","url":"https://example.org/demo/heatmaps","summary":"Fabricated demonstration record; not a real repository.","year":null}
+  ]
+}
